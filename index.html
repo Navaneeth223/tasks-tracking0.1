@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="en" class=""> <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            /* Default light mode background, dark mode will override */
+            background-color: #f3f4f6; /* bg-gray-100 */
+            color: #1f2937; /* text-gray-800 */
+            overflow-x: auto; /* Allow horizontal scroll for many columns */
+            min-height: 100vh;
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+        /* Dark mode styles */
+        .dark body {
+            background-color: #1f2937; /* bg-gray-800 */
+            color: #f3f4f6; /* text-gray-100 */
+        }
+        .dark .kanban-column {
+            background-color: #374151; /* bg-gray-700 */
+            border-color: #4b5563; /* border-gray-600 */
+        }
+        .dark .task {
+            background-color: #4b5563; /* bg-gray-600 */
+            border-color: #52525b; /* border-zinc-600 */
+            color: #e5e7eb; /* text-gray-200 */
+        }
+        .dark .add-item-container, .dark .modal-content {
+            background-color: #374151; /* bg-gray-700 */
+            color: #f3f4f6; /* text-gray-100 */
+        }
+        .dark .modal-content {
+             border-color: #4b5563;
+        }
+        .dark input, .dark select, .dark textarea {
+            background-color: #4b5563; /* bg-gray-600 */
+            border-color: #52525b; /* border-zinc-500 */
+            color: #e5e7eb; /* text-gray-200 */
+        }
+        .dark input::placeholder, .dark textarea::placeholder {
+            color: #9ca3af; /* text-gray-400 */
+        }
+        .dark .column-title {
+             /* color handled by theme object or default dark text */
+        }
+        .dark .close-button {
+            color: #9ca3af; /* text-gray-400 */
+        }
+        .dark .close-button:hover {
+            color: #e5e7eb; /* text-gray-200 */
+        }
+        .dark .delete-column-btn {
+            color: #f87171; /* red-400 */
+        }
+        .dark .delete-column-btn:hover {
+            color: #ef4444; /* red-500 */
+        }
+
+
+        .kanban-board-container {
+            display: flex;
+            gap: 1.5rem;
+            padding: 1rem;
+            align-items: flex-start;
+            min-height: calc(100vh - 220px); /* Adjusted for header */
+        }
+        .kanban-column {
+            flex: 0 0 320px;
+            width: 320px;
+            max-width: 320px;
+            min-height: 400px;
+            /* Default light mode */
+            background-color: white;
+            padding: 1.25rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
+            transition: background-color 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+            cursor: grab;
+        }
+        .kanban-column:active {
+            cursor: grabbing;
+            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.2), 0 4px 6px -2px rgba(0,0,0,0.1);
+        }
+        .kanban-column.column-drag-over {
+            outline: 2px dashed #4f46e5; /* Indigo outline */
+            outline-offset: 4px;
+        }
+        .column-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom-width: 2px;
+            /* Border color will be set by JS based on theme */
+            transition: border-color 0.3s ease, background-color 0.3s ease;
+            padding: 0.75rem; /* Added padding to header */
+            border-radius: 0.375rem 0.375rem 0 0; /* Rounded top corners */
+        }
+        .column-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            /* Text color will be set by JS based on theme */
+            transition: color 0.3s ease;
+        }
+        .delete-column-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 1.2rem;
+            padding: 0.25rem;
+            /* color set by theme or default */
+        }
+        .tasks-container {
+            min-height: 200px;
+            padding-top: 0.5rem; /* Add some space below header */
+        }
+        .tasks-container.drag-over {
+            background-color: #c7d2fe; /* indigo-200 */
+        }
+        .dark .tasks-container.drag-over {
+            background-color: #4338ca; /* indigo-700 */
+        }
+        .task {
+            cursor: grab;
+            transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out, background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
+            word-break: break-word;
+            /* Default light mode task */
+            background-color: #f9fafb; /* bg-gray-50 */
+            border: 1px solid #e5e7eb; /* border-gray-200 */
+            color: #1f2937; /* text-gray-800 */
+            padding: 1rem; /* p-4 */
+            border-radius: 0.5rem; /* rounded-lg */
+            box-shadow: 0 1px 3px 0 rgba(0,0,0,0.1), 0 1px 2px 0 rgba(0,0,0,0.06); /* shadow */
+            margin-bottom: 0.75rem; /* space-y-3 equivalent */
+        }
+        .task:active {
+            cursor: grabbing;
+            transform: scale(1.05);
+        }
+        .task.dragging {
+            opacity: 0.5;
+        }
+        #confetti-canvas {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; z-index: 9999;
+        }
+        .add-item-container {
+            background-color: white;
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+         .modal {
+            display: none; position: fixed; z-index: 1000; left: 0; top: 0;
+            width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.4);
+        }
+        .modal-content {
+            background-color: #fefefe; margin: 10% auto; padding: 20px;
+            border: 1px solid #e5e7eb; /* border-gray-200 */
+            width: 90%; max-width: 500px; border-radius: 0.5rem;
+            transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+        }
+        .close-button {
+            color: #9ca3af; /* text-gray-400 */
+            float: right; font-size: 28px; font-weight: bold;
+        }
+        .close-button:hover, .close-button:focus {
+            color: #1f2937; /* text-gray-800 */
+            text-decoration: none; cursor: pointer;
+        }
+        /* General input styling for better dark mode compatibility */
+        input, select, textarea {
+            transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+        }
+        .theme-toggle-button {
+            padding: 0.5rem 1rem;
+            border-radius: 0.375rem;
+            font-weight: 500;
+            transition: background-color 0.2s ease, color 0.2s ease;
+        }
+        .theme-toggle-button.light {
+            background-color: #4f46e5; /* indigo-600 */
+            color: white;
+        }
+        .theme-toggle-button.light:hover {
+            background-color: #4338ca; /* indigo-700 */
+        }
+        .theme-toggle-button.dark {
+            background-color: #f59e0b; /* amber-500 */
+            color: #1f2937; /* text-gray-800 */
+        }
+         .theme-toggle-button.dark:hover {
+            background-color: #d97706; /* amber-600 */
+        }
+
+    </style>
+</head>
+<body> <canvas id="confetti-canvas"></canvas>
+
+    <div class="container mx-auto px-4 py-6">
+        <header class="text-center mb-6 flex justify-between items-center">
+            <h1 class="text-4xl font-bold text-indigo-600 dark:text-indigo-400">Tracker</h1>
+            <button id="theme-toggle-btn" class="theme-toggle-button light">Toggle Theme</button>
+        </header>
+
+        <div class="mb-8 max-w-3xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="add-item-container">
+                <h2 class="text-2xl font-semibold mb-4">Add New Task</h2>
+                <input type="text" id="new-task-input" placeholder="Enter task description" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none mb-3" />
+                <label for="task-column-select" class="block mb-2 text-sm font-medium">Add to column:</label>
+                <select id="task-column-select" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none mb-3">
+                </select>
+                <button id="add-task-button" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md transition duration-150 ease-in-out">
+                    Add Task
+                </button>
+            </div>
+
+            <div class="add-item-container">
+                <h2 class="text-2xl font-semibold mb-4">Add New List</h2>
+                <input type="text" id="new-column-input" placeholder="Enter new list title" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none mb-3" />
+                <label for="column-color-select" class="block mb-2 text-sm font-medium">List color theme:</label>
+                <select id="column-color-select" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none mb-3">
+                    </select>
+                <button id="add-column-button" class="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md transition duration-150 ease-in-out">
+                    Add List
+                </button>
+            </div>
+        </div>
+
+        <div id="kanban-columns-container" class="kanban-board-container pb-8">
+        </div>
+    </div>
+
+    <div id="editTaskModal" class="modal">
+        <div class="modal-content">
+            <span class="close-button" id="closeModalButton">&times;</span>
+            <h3 class="text-xl font-semibold mb-4">Edit Task</h3>
+            <input type="hidden" id="editTaskId">
+            <textarea id="editTaskText" class="w-full p-2 border border-gray-300 rounded-md h-24 mb-3"></textarea>
+            <label for="edit-task-column-select" class="block mb-2 text-sm font-medium">Move to column:</label>
+            <select id="edit-task-column-select" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none mb-4">
+            </select>
+            <div class="flex justify-between items-center">
+                <button id="deleteTaskButton" class="bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-150">
+                    Delete Task
+                </button>
+                <button id="saveTaskButton" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-lg transition duration-150">
+                    Save Changes
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- DOM Elements ---
+        const themeToggleButton = document.getElementById('theme-toggle-btn');
+        const newTaskInput = document.getElementById('new-task-input');
+        const taskColumnSelect = document.getElementById('task-column-select');
+        const addTaskButton = document.getElementById('add-task-button');
+        const newColumnInput = document.getElementById('new-column-input');
+        const columnColorSelect = document.getElementById('column-color-select');
+        const addColumnButton = document.getElementById('add-column-button');
+        const kanbanColumnsContainer = document.getElementById('kanban-columns-container');
+        const editModal = document.getElementById('editTaskModal');
+        const closeModalButton = document.getElementById('closeModalButton');
+        const editTaskIdInput = document.getElementById('editTaskId');
+        const editTaskTextInput = document.getElementById('editTaskText');
+        const editTaskColumnSelect = document.getElementById('edit-task-column-select');
+        const saveTaskButton = document.getElementById('saveTaskButton');
+        const deleteTaskButton = document.getElementById('deleteTaskButton');
+
+        // --- State Management ---
+        let tasks = [];
+        let columnsData = [];
+        let draggedTaskId = null;
+        let draggedColumnId = null;
+        let currentTheme = localStorage.getItem('theme') || 'light';
+
+        // --- Column Color Themes ---
+        const COLUMN_THEMES = {
+            gray: { name: 'Gray', light: { border: 'border-gray-400', bg: 'bg-gray-200', text: 'text-gray-700' }, dark: { border: 'dark:border-gray-500', bg: 'dark:bg-gray-600', text: 'dark:text-gray-100' }},
+            red: { name: 'Red', light: { border: 'border-red-500', bg: 'bg-red-100', text: 'text-red-700' }, dark: { border: 'dark:border-red-400', bg: 'dark:bg-red-700', text: 'dark:text-red-100' }},
+            yellow: { name: 'Yellow', light: { border: 'border-yellow-500', bg: 'bg-yellow-100', text: 'text-yellow-700' }, dark: { border: 'dark:border-yellow-400', bg: 'dark:bg-yellow-700', text: 'dark:text-yellow-100' }},
+            green: { name: 'Green', light: { border: 'border-green-500', bg: 'bg-green-100', text: 'text-green-700' }, dark: { border: 'dark:border-green-400', bg: 'dark:bg-green-700', text: 'dark:text-green-100' }},
+            blue: { name: 'Blue', light: { border: 'border-blue-500', bg: 'bg-blue-100', text: 'text-blue-700' }, dark: { border: 'dark:border-blue-400', bg: 'dark:bg-blue-700', text: 'dark:text-blue-100' }},
+            indigo: { name: 'Indigo', light: { border: 'border-indigo-500', bg: 'bg-indigo-100', text: 'text-indigo-700' }, dark: { border: 'dark:border-indigo-400', bg: 'dark:bg-indigo-700', text: 'dark:text-indigo-100' }},
+            purple: { name: 'Purple', light: { border: 'border-purple-500', bg: 'bg-purple-100', text: 'text-purple-700' }, dark: { border: 'dark:border-purple-400', bg: 'dark:bg-purple-700', text: 'dark:text-purple-100' }},
+            pink: { name: 'Pink', light: { border: 'border-pink-500', bg: 'bg-pink-100', text: 'text-pink-700' }, dark: { border: 'dark:border-pink-400', bg: 'dark:bg-pink-700', text: 'dark:text-pink-100' }}
+        };
+        const DEFAULT_COLUMNS_CONFIG = [
+            { title: 'To Do', themeColorName: 'red' },
+            { title: 'In Progress', themeColorName: 'yellow' },
+            { title: 'Done', themeColorName: 'green' }
+        ];
+
+        // --- Theme Functions ---
+        function applyTheme(theme) {
+            if (theme === 'dark') {
+                document.documentElement.classList.add('dark');
+                themeToggleButton.textContent = 'Light Mode';
+                themeToggleButton.classList.remove('light');
+                themeToggleButton.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+                themeToggleButton.textContent = 'Dark Mode';
+                themeToggleButton.classList.remove('dark');
+                themeToggleButton.classList.add('light');
+            }
+            currentTheme = theme;
+            localStorage.setItem('theme', theme);
+            renderBoard(); // Re-render board to apply column theme changes for dark/light mode
+        }
+
+        function toggleTheme() {
+            applyTheme(currentTheme === 'light' ? 'dark' : 'light');
+        }
+
+
+        // --- Initialization ---
+        document.addEventListener('DOMContentLoaded', () => {
+            applyTheme(currentTheme); // Apply saved or default theme
+            populateColorThemeSelect();
+            loadStateFromLocalStorage(); // This will call renderBoard
+            resizeConfettiCanvas();
+        });
+
+        function populateColorThemeSelect() {
+            Object.keys(COLUMN_THEMES).forEach(key => {
+                const option = new Option(COLUMN_THEMES[key].name, key);
+                columnColorSelect.add(option);
+            });
+            columnColorSelect.value = 'gray'; // Default selection
+        }
+
+        // --- Board Rendering ---
+        function renderBoard() {
+            kanbanColumnsContainer.innerHTML = '';
+            populateColumnSelects();
+
+            columnsData.forEach(column => {
+                const columnEl = createColumnElement(column);
+                kanbanColumnsContainer.appendChild(columnEl);
+            });
+        }
+
+        function populateColumnSelects() {
+            taskColumnSelect.innerHTML = '';
+            editTaskColumnSelect.innerHTML = '';
+            columnsData.forEach(col => {
+                const option1 = new Option(col.title, col.id);
+                const option2 = new Option(col.title, col.id);
+                taskColumnSelect.add(option1);
+                editTaskColumnSelect.add(option2);
+            });
+        }
+
+        // --- Column Functions ---
+        function createColumnElement(column) {
+            const columnDiv = document.createElement('div');
+            columnDiv.id = column.id;
+            columnDiv.classList.add('kanban-column');
+            columnDiv.draggable = true;
+
+            const columnHeaderDiv = document.createElement('div');
+            columnHeaderDiv.classList.add('column-header');
+
+            // Apply theme colors to header
+            const theme = COLUMN_THEMES[column.themeColorName] || COLUMN_THEMES.gray;
+            const modeTheme = currentTheme === 'dark' ? theme.dark : theme.light;
+            
+            columnHeaderDiv.classList.add(...modeTheme.border.split(" ").filter(c => !c.startsWith("dark:"))); // Base border
+            columnHeaderDiv.classList.add(...modeTheme.bg.split(" ").filter(c => !c.startsWith("dark:")));   // Base bg
+            
+            if (currentTheme === 'dark') {
+                 columnHeaderDiv.classList.add(...modeTheme.border.split(" ").filter(c => c.startsWith("dark:")));
+                 columnHeaderDiv.classList.add(...modeTheme.bg.split(" ").filter(c => c.startsWith("dark:")));
+            }
+
+
+            const columnTitleH2 = document.createElement('h2');
+            columnTitleH2.classList.add('column-title');
+            columnTitleH2.textContent = column.title;
+            columnTitleH2.classList.add(...modeTheme.text.split(" ").filter(c => !c.startsWith("dark:")));
+             if (currentTheme === 'dark') {
+                 columnTitleH2.classList.add(...modeTheme.text.split(" ").filter(c => c.startsWith("dark:")));
+            }
+
+
+            const deleteColBtn = document.createElement('button');
+            deleteColBtn.classList.add('delete-column-btn');
+            deleteColBtn.innerHTML = '&times;';
+            deleteColBtn.title = `Delete "${column.title}" list`;
+            deleteColBtn.onclick = (e) => {
+                e.stopPropagation();
+                if (confirm(`Are you sure you want to delete the "${column.title}" list and all its tasks?`)) {
+                    deleteColumn(column.id);
+                }
+            };
+
+            columnHeaderDiv.appendChild(columnTitleH2);
+            columnHeaderDiv.appendChild(deleteColBtn);
+
+            const tasksContainerDiv = document.createElement('div');
+            tasksContainerDiv.classList.add('tasks-container');
+            tasksContainerDiv.dataset.columnId = column.id;
+
+            tasks.filter(task => task.columnId === column.id).forEach(task => {
+                const taskEl = createTaskElement(task);
+                tasksContainerDiv.appendChild(taskEl);
+            });
+
+            columnDiv.appendChild(columnHeaderDiv);
+            columnDiv.appendChild(tasksContainerDiv);
+
+            columnDiv.addEventListener('dragstart', handleColumnDragStart);
+            columnDiv.addEventListener('dragend', handleColumnDragEnd);
+            columnDiv.addEventListener('dragover', handleColumnDragOver);
+            columnDiv.addEventListener('dragleave', handleColumnDragLeave);
+            columnDiv.addEventListener('drop', handleColumnDrop);
+
+            tasksContainerDiv.addEventListener('dragover', handleTaskDragOver);
+            tasksContainerDiv.addEventListener('dragleave', handleTaskDragLeave);
+            tasksContainerDiv.addEventListener('drop', handleTaskDrop);
+
+            return columnDiv;
+        }
+
+        function addColumn() {
+            const title = newColumnInput.value.trim();
+            const selectedThemeColorName = columnColorSelect.value;
+            if (!title) {
+                alert("Column title cannot be empty."); return;
+            }
+            const newColumn = {
+                id: `col-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                title: title,
+                themeColorName: selectedThemeColorName
+            };
+            columnsData.push(newColumn);
+            newColumnInput.value = '';
+            renderBoard();
+            saveStateToLocalStorage();
+        }
+
+        function deleteColumn(columnIdToDelete) {
+            tasks = tasks.filter(task => task.columnId !== columnIdToDelete);
+            columnsData = columnsData.filter(column => column.id !== columnIdToDelete);
+            renderBoard();
+            saveStateToLocalStorage();
+        }
+
+        // --- Task Functions (largely unchanged, except for confetti trigger) ---
+        function createTaskElement(task) {
+            const taskDiv = document.createElement('div');
+            taskDiv.id = task.id;
+            taskDiv.classList.add('task'); // Base class, dark mode handled by .dark .task
+            taskDiv.draggable = true;
+            taskDiv.textContent = task.text;
+
+            taskDiv.addEventListener('dragstart', (event) => {
+                draggedTaskId = task.id;
+                event.dataTransfer.setData('text/plain', task.id);
+                event.target.classList.add('dragging');
+            });
+            taskDiv.addEventListener('dragend', (event) => {
+                draggedTaskId = null;
+                event.target.classList.remove('dragging');
+            });
+            taskDiv.addEventListener('click', () => openEditModal(task));
+            return taskDiv;
+        }
+
+        function addTask() {
+            const taskText = newTaskInput.value.trim();
+            const selectedColumnId = taskColumnSelect.value;
+
+            if (taskText === '') { alert("Task description cannot be empty!"); newTaskInput.focus(); return; }
+            if (!selectedColumnId && columnsData.length > 0) { alert("Please select a column."); return; }
+            if (columnsData.length === 0) { alert("Please add a list/column first."); return; }
+
+            const newTask = {
+                id: `task-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                text: taskText,
+                columnId: selectedColumnId
+            };
+            tasks.push(newTask);
+            newTaskInput.value = '';
+            renderBoard();
+            saveStateToLocalStorage();
+        }
+
+        function openEditModal(task) {
+            editTaskIdInput.value = task.id;
+            editTaskTextInput.value = task.text;
+            editTaskColumnSelect.value = task.columnId;
+            editModal.style.display = 'block';
+        }
+
+        function closeEditModal() {
+            editModal.style.display = 'none';
+        }
+
+        function saveEditedTask() {
+            const taskId = editTaskIdInput.value;
+            const newText = editTaskTextInput.value.trim();
+            const newColumnId = editTaskColumnSelect.value;
+
+            if (newText === '') { alert("Task description cannot be empty!"); editTaskTextInput.focus(); return; }
+
+            const taskIndex = tasks.findIndex(t => t.id === taskId);
+            if (taskIndex > -1) {
+                const oldColumnId = tasks[taskIndex].columnId;
+                tasks[taskIndex].text = newText;
+                tasks[taskIndex].columnId = newColumnId;
+                
+                renderBoard();
+                saveStateToLocalStorage();
+                closeEditModal();
+
+                const targetColumn = columnsData.find(col => col.id === newColumnId);
+                // Confetti if moved to a column explicitly named "Done" (case insensitive)
+                if (targetColumn && targetColumn.title.toLowerCase() === 'done' && oldColumnId !== newColumnId) {
+                    triggerConfetti();
+                }
+            }
+        }
+
+        function deleteTask() {
+            const taskId = editTaskIdInput.value;
+            tasks = tasks.filter(t => t.id !== taskId);
+            renderBoard();
+            saveStateToLocalStorage();
+            closeEditModal();
+        }
+
+        // --- Drag and Drop Handlers (largely unchanged, check confetti trigger) ---
+        function handleTaskDragOver(event) { event.preventDefault(); this.classList.add('drag-over'); }
+        function handleTaskDragLeave(event) { this.classList.remove('drag-over'); }
+        function handleTaskDrop(event) {
+            event.preventDefault();
+            this.classList.remove('drag-over');
+            const targetColumnId = this.dataset.columnId;
+            const task = tasks.find(t => t.id === draggedTaskId);
+
+            if (task && task.columnId !== targetColumnId) {
+                const oldColumnId = task.columnId;
+                task.columnId = targetColumnId;
+                renderBoard();
+                saveStateToLocalStorage();
+
+                const targetColumn = columnsData.find(col => col.id === targetColumnId);
+                const oldCol = columnsData.find(c => c.id === oldColumnId);
+                if (targetColumn && targetColumn.title.toLowerCase() === 'done') {
+                    if (!oldCol || oldCol.title.toLowerCase() !== 'done') {
+                        triggerConfetti();
+                    }
+                }
+            }
+            draggedTaskId = null;
+        }
+
+        function handleColumnDragStart(event) {
+            if (event.target.classList.contains('delete-column-btn')) { event.preventDefault(); return; }
+            draggedColumnId = this.id;
+            event.dataTransfer.setData('text/plain', this.id);
+            event.dataTransfer.effectAllowed = 'move';
+            setTimeout(() => { this.style.opacity = '0.5'; }, 0);
+        }
+        function handleColumnDragEnd(event) {
+            if (draggedColumnId) {
+                 const draggedEl = document.getElementById(draggedColumnId);
+                 if (draggedEl) draggedEl.style.opacity = '1';
+            }
+            document.querySelectorAll('.kanban-column').forEach(col => col.classList.remove('column-drag-over'));
+            draggedColumnId = null;
+        }
+        function handleColumnDragOver(event) {
+            event.preventDefault(); event.dataTransfer.dropEffect = 'move';
+            if (this.id !== draggedColumnId) { this.classList.add('column-drag-over');}
+        }
+        function handleColumnDragLeave(event) {
+            if (!this.contains(event.relatedTarget) && this.id !== draggedColumnId) {
+                 this.classList.remove('column-drag-over');
+            }
+        }
+        function handleColumnDrop(event) {
+            event.preventDefault(); event.stopPropagation();
+            this.classList.remove('column-drag-over');
+            if (!draggedColumnId || this.id === draggedColumnId) return;
+
+            const targetColumnId = this.id;
+            const draggedIndex = columnsData.findIndex(col => col.id === draggedColumnId);
+            const targetIndex = columnsData.findIndex(col => col.id === targetColumnId);
+
+            if (draggedIndex !== -1 && targetIndex !== -1) {
+                const [draggedItem] = columnsData.splice(draggedIndex, 1);
+                columnsData.splice(targetIndex, 0, draggedItem);
+                renderBoard();
+                saveStateToLocalStorage();
+            }
+        }
+
+        // --- Local Storage ---
+        function saveStateToLocalStorage() {
+            localStorage.setItem('kanbanAppState', JSON.stringify({ tasks, columnsData }));
+        }
+        function loadStateFromLocalStorage() {
+            const storedState = localStorage.getItem('kanbanAppState');
+            if (storedState) {
+                const appState = JSON.parse(storedState);
+                tasks = appState.tasks || [];
+                columnsData = appState.columnsData || [];
+                if (columnsData.length === 0 && DEFAULT_COLUMNS_CONFIG.length > 0) {
+                    // Initialize with default columns if none are stored
+                    columnsData = DEFAULT_COLUMNS_CONFIG.map(colConfig => ({
+                        id: `col-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                        title: colConfig.title,
+                        themeColorName: colConfig.themeColorName
+                    }));
+                }
+            } else {
+                // Initialize with default columns if nothing in local storage
+                columnsData = DEFAULT_COLUMNS_CONFIG.map(colConfig => ({
+                    id: `col-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                    title: colConfig.title,
+                    themeColorName: colConfig.themeColorName
+                }));
+                // Optionally add a few default tasks
+                 tasks = [
+                     { id: `task-${Date.now()}-10`, text: 'Try out dark mode!', columnId: columnsData[0].id },
+                     { id: `task-${Date.now()}-11`, text: 'Customize column colors', columnId: columnsData[0].id },
+                     { id: `task-${Date.now()}-12`, text: 'Drag to "Done" for confetti', columnId: columnsData[1].id }
+                ];
+            }
+            renderBoard(); // Crucial to render after loading
+        }
+
+        // --- Confetti Animation (Unchanged) ---
+        const confettiCanvas = document.getElementById('confetti-canvas');
+        const confettiCtx = confettiCanvas.getContext('2d');
+        let confettiPieces = [];
+        const confettiColors = ['#f44336', '#e91e63', '#9c27b0', '#673ab7', '#3f51b5', '#2196f3', '#03a9f4', '#00bcd4', '#009688', '#4CAF50', '#8BC34A', '#CDDC39', '#FFEB3B', '#FFC107', '#FF9800', '#FF5722'];
+        function resizeConfettiCanvas() { confettiCanvas.width = window.innerWidth; confettiCanvas.height = window.innerHeight; }
+        function ConfettiPiece(x, y) { this.x = x; this.y = y; this.size = Math.random() * 8 + 4; this.vx = Math.random() * 6 - 3; this.vy = Math.random() * -15 - 5; this.gravity = 0.5; this.opacity = 1; this.color = confettiColors[Math.floor(Math.random() * confettiColors.length)]; this.angle = Math.random() * Math.PI * 2; this.angularSpin = Math.random() * 0.1 - 0.05;}
+        ConfettiPiece.prototype.update = function() { this.vy += this.gravity; this.x += this.vx; this.y += this.vy; this.opacity -= 0.01; this.angle += this.angularSpin; };
+        ConfettiPiece.prototype.draw = function() { confettiCtx.save(); confettiCtx.translate(this.x + this.size / 2, this.y + this.size / 2); confettiCtx.rotate(this.angle); confettiCtx.fillStyle = this.color; confettiCtx.globalAlpha = this.opacity; confettiCtx.fillRect(-this.size / 2, -this.size / 2, this.size, this.size); confettiCtx.restore(); };
+        let confettiAnimationId;
+        function triggerConfetti() {
+            confettiPieces = []; const centerX = confettiCanvas.width / 2; const centerY = confettiCanvas.height / 3;
+            for (let i = 0; i < 150; i++) { confettiPieces.push(new ConfettiPiece(centerX, centerY));}
+            if (confettiPieces.length > 0 && !confettiAnimationId) animateConfetti();
+        }
+        function animateConfetti() {
+            confettiCtx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height); let activePieces = false;
+            confettiPieces.forEach((piece, index) => {
+                piece.update(); piece.draw();
+                if (piece.opacity > 0 && piece.y < confettiCanvas.height) { activePieces = true; } else { confettiPieces.splice(index, 1); }
+            });
+            if (activePieces) { confettiAnimationId = requestAnimationFrame(animateConfetti); }
+            else { cancelAnimationFrame(confettiAnimationId); confettiAnimationId = null; confettiCtx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height); }
+        }
+
+        // --- Event Listeners ---
+        themeToggleButton.addEventListener('click', toggleTheme);
+        addTaskButton.addEventListener('click', addTask);
+        newTaskInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') addTask(); });
+        addColumnButton.addEventListener('click', addColumn);
+        newColumnInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') addColumn(); });
+        closeModalButton.addEventListener('click', closeEditModal);
+        saveTaskButton.addEventListener('click', saveEditedTask);
+        deleteTaskButton.addEventListener('click', deleteTask);
+        window.addEventListener('click', (event) => { if (event.target == editModal) closeEditModal(); });
+        window.addEventListener('resize', resizeConfettiCanvas);
+
+    </script>
+</body>
+</html>
